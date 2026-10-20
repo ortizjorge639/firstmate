@@ -72,3 +72,5 @@ fm doctor         # check deps, harness config, Copilot patch
 The canvas also has a steer box under each task's Peek, which sends an instruction to that crewmate (via `fm-send.sh`).
 
 Known limit: Copilot has no turn-end hooks, so the first mate may print "watcher still down" and must poll; task state falls back to `working` (live pane) or `reported` (report present).
+
+Skill for guiding a new session: copy `extras/firstmate-skill/` to `~/.copilot/skills/firstmate/`.
