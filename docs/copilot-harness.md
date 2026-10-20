@@ -54,3 +54,7 @@ in plain English ("scout how X works", "fix Y, local-only").
 - After pulling upstream, re-check `bin/fm-harness.sh crew` prints `copilot`.
 - Tell the first mate not to edit `config/`, `bin/`, or wrap the CLI to fake
   another harness.
+
+## Canvas console (GitHub Copilot app)
+
+`extras/firstmate-console/` is a canvas extension: project picker, scout/ship toggle, mode, task box, Send (types into the first mate's tmux pane), and live pane + fleet status (polls every 2s). Install: copy it to `~/.copilot/extensions/firstmate-console/` and reload extensions. Loopback-only with a per-instance token.
