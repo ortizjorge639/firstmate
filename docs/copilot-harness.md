@@ -57,4 +57,4 @@ in plain English ("scout how X works", "fix Y, local-only").
 
 ## Canvas console (GitHub Copilot app)
 
-`extras/firstmate-console/` is a canvas extension: project picker, scout/ship toggle, mode, task box, Send (types into the first mate's tmux pane), and live pane + fleet status (polls every 2s). Install: copy it to `~/.copilot/extensions/firstmate-console/` and reload extensions. Loopback-only with a per-instance token.
+`extras/firstmate-console/` is a canvas extension: project picker, scout/ship toggle, mode, task box, Send (types into the first mate's tmux pane), a live first-mate pane, and a fleet view with per-task cards (state, kind, project, PR link, Peek at the crewmate pane, Report viewer), queued/done counts and scout reports (polls every 2s). Install: copy it to `~/.copilot/extensions/firstmate-console/` and reload extensions. Loopback-only with a per-instance token.
