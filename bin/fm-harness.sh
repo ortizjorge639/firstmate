@@ -208,6 +208,7 @@ harness_process_verdict() {  # <pid>
     *opencode*) echo "comm opencode"; return ;;
     *grok*) echo "comm grok"; return ;;
     kimi) echo "comm kimi"; return ;;
+    copilot) echo "comm copilot"; return ;;
     rovo) echo "comm rovo"; return ;;
       # muse's installed launcher ~/.local/bin/muse execs ~/.local/bin/muse-bin-<version>
       # (verified in the published launcher, muse 0.1.0-R708.1), so the live process
@@ -415,7 +416,7 @@ supervision_primary_pin() {
   local pin=${FM_SUPERVISION_PRIMARY_HARNESS:-}
   [ "${FM_SUPERVISION_ACTOR:-}" = branch ] && [ -n "$pin" ] || return 0
   case "$pin" in
-    claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|muse|rovo|omp|agy|devin|commandcode|polytoken)
+    claude|codex|opencode|pi|pi-signed|grok|kimi|cursor|gemini|copilot|muse|rovo|omp|agy|devin|commandcode|polytoken)
       printf '%s\n' "$pin"
       ;;
     *)
