@@ -5,6 +5,11 @@
 #   fm watch      attach to the tmux session to watch the crew (Ctrl-b d detaches)
 #   fm windows    list the first mate and crewmate tmux windows
 #   fm stop       stop the first mate session (crewmates included; asks first)
+#   fm scout [-p dir] [-m mode] "task"   send a scout task to the first mate
+#   fm ship  [-p dir] [-m mode] "task"   send a ship task (code changes)
+#   fm peek <id>  tail a crewmate's pane
+#   fm report <id> print a scout report
+#   fm doctor     check deps and the Copilot patch
 set -eu
 
 ROOT="$(cd "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/.." && pwd)"
@@ -30,5 +35,33 @@ case "${1:-start}" in
     read -r ans
     [ "$ans" = y ] && tmux kill-session -t "$SESSION" && echo stopped
     ;;
-  *) sed -n 2,7p "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  scout|ship)
+    kind=$1; shift; proj=$PWD; mode=local-only
+    while getopts p:m: o; do case $o in p) proj=$(cd "$OPTARG" && pwd);; m) mode=$OPTARG;; *) exit 2;; esac; done
+    shift $((OPTIND - 1))
+    task=$(printf '%s' "$*" | tr '\n' ' ')
+    [ -n "$task" ] || { echo "usage: fm $kind [-p dir] [-m local-only|direct-PR|no-mistakes] \"task\"" >&2; exit 2; }
+    case $mode in local-only|direct-PR|no-mistakes) ;; *) echo "bad mode: $mode" >&2; exit 2;; esac
+    label=$(printf '%s' "$kind" | sed 's/^./\U&/')
+    alive || tmux new-session -d -s "$SESSION" -n first-mate -c "$ROOT" 'copilot --allow-all --no-auto-update'
+    tmux send-keys -t "$SESSION:first-mate" -l "$label task for project $proj (mode: $mode; register the project first if it is not registered). $task"
+    tmux send-keys -t "$SESSION:first-mate" Enter
+    echo "sent to first mate. Watch: fm watch   Overview: fm status"
+    ;;
+  peek) [ -n "${2:-}" ] || { echo "usage: fm peek <id>" >&2; exit 2; }; exec "$ROOT/bin/fm-peek.sh" "$2" "${3:-40}" ;;
+  report)
+    [ -n "${2:-}" ] || { echo "usage: fm report <id>" >&2; exit 2; }
+    case $2 in *[!A-Za-z0-9._-]*) echo "bad id" >&2; exit 2;; esac
+    cat "$ROOT/data/$2/report.md" ;;
+  doctor)
+    bad=0
+    for c in git tmux gh copilot treehouse jq; do
+      if command -v "$c" >/dev/null; then echo "ok   $c"; else echo "MISS $c"; bad=1; fi
+    done
+    [ "$(cat "$ROOT/config/crew-harness" 2>/dev/null)" = copilot ] && echo "ok   config/crew-harness=copilot" || { echo "MISS config/crew-harness (run bin/fm-setup-copilot.sh)"; bad=1; }
+    grep -q '\^copilot\$' "$ROOT/bin/fm-session-lock-lib.sh" && echo "ok   copilot patch present" || { echo "MISS copilot patch (is main checked out and clean?)"; bad=1; }
+    [ "$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)" = main ] && echo "ok   on main" || { echo "WARN not on main; session start may drop the patch"; }
+    alive && echo "ok   session running" || echo "info session not running"
+    exit $bad ;;
+  *) sed -n 2,13p "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

@@ -11,7 +11,7 @@ const HOME = homedir();
 export const FM_ROOT = process.env.FM_ROOT || join(HOME, "code", "firstmate");
 const SESSION = "firstmate";
 const WINDOW = "first-mate";
-const ENV = { ...process.env, PATH: `${HOME}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}` };
+const ENV = { ...process.env, FM_HOME: FM_ROOT, PATH: `${HOME}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}` };
 const MODES = ["local-only", "direct-PR", "no-mistakes"];
 const KINDS = ["scout", "ship"];
 
@@ -71,11 +71,19 @@ async function sendToFirstMate(message) {
 
 const ID_RE = /^[A-Za-z0-9._-]{1,80}$/;
 
+function friendlyState(t) {
+    const st = t.current_state?.state;
+    if (st && st !== "unknown") return st;
+    if (t.paths?.report?.present) return "reported";
+    if (t.endpoint?.exists) return "working";
+    return "unknown";
+}
+
 function simplifyFleet(snap) {
     const tasks = (snap.tasks || []).map((t) => ({
         id: t.id,
         kind: t.kind,
-        state: t.current_state?.state ?? "unknown",
+        state: friendlyState(t),
         source: t.current_state?.source ?? null,
         project: t.backlog?.repo ?? t.project ?? null,
         backend: t.backend ?? null,
@@ -118,6 +126,17 @@ async function peekTask(id) {
     if (!ID_RE.test(id)) throw new Error("bad id");
     const out = await run(join(FM_ROOT, "bin", "fm-peek.sh"), [id, "40"], { env: ENV, cwd: FM_ROOT, timeout: 15000 });
     return out.stdout.split("\n").filter((l) => l.trim()).slice(-30).join("\n");
+}
+
+async function steerTask(id, text) {
+    if (!ID_RE.test(id)) throw new Error("bad id");
+    text = String(text ?? "").replace(/\s+/g, " ").trim();
+    if (!text || text.length > 2000) throw new Error("text must be 1-2000 chars");
+    const snap = JSON.parse((await run(join(FM_ROOT, "bin", "fm-fleet-snapshot.sh"), ["--json"], { env: ENV, cwd: FM_ROOT, timeout: 20000, maxBuffer: 8 * 1024 * 1024 })).stdout);
+    const t = (snap.tasks || []).find((x) => x.id === id);
+    if (!t || t.kind === "secondmate") throw new Error("not a steerable task");
+    await run(join(FM_ROOT, "bin", "fm-send.sh"), [`fm-${id}`, text], { env: ENV, cwd: FM_ROOT, timeout: 15000 });
+    return { sent: true };
 }
 
 function readReport(id) {
@@ -179,6 +198,7 @@ button:hover:not(:disabled){filter:brightness(1.15)}button:active:not(:disabled)
 .task pre{margin-top:8px;max-height:180px}
 .raw summary{cursor:pointer;color:var(--mut);font-size:12px}.raw pre{margin-top:8px}
 a{color:var(--cyan)}
+.steer{margin-top:8px}.steer input{font-size:12px}
 kbd{color:var(--mut);font-size:11px}
 #msg{color:var(--mut);font-size:12px}
 pre{margin:0;padding:10px 12px;max-height:230px;overflow:auto;white-space:pre-wrap;background:#090b0f;border:1px solid var(--bd);border-left:2px solid var(--pur);border-radius:6px;font:12px/1.5 inherit;color:#b6c0cc}
@@ -201,7 +221,8 @@ firstmate console</div><p class="sub">Talk to one agent. Ship with a crew.</p>
 const T=${JSON.stringify(token)};
 const $=id=>document.getElementById(id);
 const H={"X-Token":T,"Content-Type":"application/json"};
-fetch("/api/projects",{headers:H}).then(r=>r.json()).then(l=>{$("projects").innerHTML=l.map(p=>'<option value="'+p+'">').join("");if(!$("project").value&&l[0])$("project").value=l.find(p=>/just-play$/.test(p))||l[0]});
+const loadProjects=()=>fetch("/api/projects",{headers:H}).then(r=>r.json()).then(l=>{$("projects").innerHTML=l.map(p=>'<option value="'+p+'">').join("");if(!$("project").value&&l[0])$("project").value=l.find(p=>/just-play$/.test(p))||l[0]});
+loadProjects();$("project").addEventListener("focus",()=>loadProjects());
 const esc=x=>String(x??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const open=new Set(), cache={};
 async function api(p){return (await fetch(p,{headers:H})).json()}
@@ -210,11 +231,12 @@ function card(t){
  return '<div class="task"><div class="top"><span class="id">'+esc(t.id)+'</span><span class="badge '+esc(String(t.state).toLowerCase())+'">'+esc(t.state)+'</span><span class="badge kind">'+esc(t.kind)+'</span></div>'
  +'<div class="meta">'+esc(t.project||"no project")+(t.backend?" - "+esc(t.backend):"")+(t.endpoint===false?" - endpoint gone":"")+(t.pr?' - <a href="'+esc(t.pr)+'" target="_blank">PR</a>':"")+'</div>'
  +'<div class="btns">'+(t.steerable?'<button class="btn2" data-k="p:'+esc(t.id)+'">'+(o?"Hide":"Peek")+'</button>':"")+(t.report?'<button class="btn2" data-k="r:'+esc(t.id)+'">'+(r?"Hide report":"Report")+'</button>':"")+'</div>'
- +(o?'<pre>'+esc(cache["p:"+t.id]||"loading...")+'</pre>':"")+(r?'<pre>'+esc(cache["r:"+t.id]||"loading...")+'</pre>':"")+'</div>';
+ +(o?'<pre>'+esc(cache["p:"+t.id]||"loading...")+'</pre><div class="steer"><input data-s="'+esc(t.id)+'" placeholder="steer this crewmate (Enter to send)"></div>':"")+(r?'<pre>'+esc(cache["r:"+t.id]||"loading...")+'</pre>':"")+'</div>';
 }
 function row(r){return '<div class="task"><div class="top"><span class="id">'+esc(r.title||r.id)+'</span>'+(r.kind?'<span class="badge kind">'+esc(r.kind)+'</span>':"")+(r.blocked?'<span class="badge blocked">blocked: '+esc(r.blocked)+'</span>':"")+'</div><div class="meta">'+esc(r.repo||"")+(r.pr?' - <a href="'+esc(r.pr)+'" target="_blank">PR</a>':"")+'</div></div>'}
 let last=null;
 function render(){
+ if(document.activeElement&&document.activeElement.dataset&&document.activeElement.dataset.s)return;
  const f=last&&last.fleet; if(!f){$("fleet").innerHTML='<div class="empty">fleet unavailable</div>';return}
  const live=f.tasks.filter(t=>!/^(done|complete|finished|merged)$/i.test(t.state));
  $("chips").innerHTML='<span class="chip'+(live.length?" hot":"")+'"><b>'+live.length+'</b> under way</span><span class="chip"><b>'+f.queued.length+'</b> queued</span><span class="chip"><b>'+(f.done.length+f.tasks.length-live.length)+'</b> done</span><span class="chip"><b>'+f.reports.length+'</b> reports</span>';
@@ -226,6 +248,9 @@ function render(){
  $("reports").innerHTML=f.reports.map(id=>'<div class="task"><div class="top"><span class="id">'+esc(id)+'</span></div><div class="btns"><button class="btn2" data-k="r:'+esc(id)+'">'+(open.has("r:"+id)?"Hide report":"Read report")+'</button></div>'+(open.has("r:"+id)?'<pre>'+esc(cache["r:"+id]||"loading...")+'</pre>':"")+'</div>').join("");
 }
 async function load(k){const [t,id]=[k[0],k.slice(2)];const j=await api("/api/"+(t==="p"?"peek":"report")+"?id="+encodeURIComponent(id)).catch(e=>({text:"error: "+e.message}));cache[k]=j.text||j.error||"";render()}
+document.addEventListener("keydown",async e=>{const id=e.target.dataset&&e.target.dataset.s;if(!id||e.key!=="Enter"||!e.target.value.trim())return;const v=e.target.value;e.target.disabled=true;
+ const r=await fetch("/api/steer",{method:"POST",headers:H,body:JSON.stringify({id,text:v})}).then(x=>x.json()).catch(x=>({error:x.message}));
+ e.target.disabled=false;e.target.value="";e.target.placeholder=r.error?"error: "+r.error:"sent - "+v.slice(0,40);e.target.focus()});
 document.addEventListener("click",e=>{const k=e.target.dataset&&e.target.dataset.k;if(!k)return;if(open.has(k)){open.delete(k);render()}else{open.add(k);render();load(k)}});
 async function refresh(){try{const s=await api("/api/status");last=s;$("dot").className="dot"+(s.alive?" on":"");$("alive").textContent=s.alive?"first mate running":"first mate idle - Send will start it";$("status").textContent=(s.windows?s.windows+"\n":"")+(s.view||"");$("pane").textContent=s.pane||"-";render();for(const k of open)if(k[0]==="p")load(k)}catch(e){}}
 $("send").onclick=async()=>{$("send").disabled=true;$("msg").textContent="sending...";
@@ -257,6 +282,15 @@ export async function startServer() {
             if (url.pathname === "/api/peek") {
                 const text = await peekTask(url.searchParams.get("id") ?? "").catch((e) => `(peek unavailable: ${e.message.split("\n")[0]})`);
                 return json(200, { text });
+            }
+            if (url.pathname === "/api/steer" && req.method === "POST") {
+                let body = "";
+                for await (const chunk of req) {
+                    body += chunk;
+                    if (body.length > 10000) return json(413, { error: "too large" });
+                }
+                const b = JSON.parse(body);
+                return json(200, await steerTask(b.id, b.text));
             }
             if (url.pathname === "/api/report") return json(200, { text: readReport(url.searchParams.get("id") ?? "") });
             if (url.pathname === "/api/send" && req.method === "POST") {
