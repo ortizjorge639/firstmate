@@ -16,6 +16,22 @@ adds the AXI helpers and `no-mistakes`. `--scratch <dir>` creates a throwaway gi
 repo; register it in `local-only` mode for smoke tests. You still need
 `gh auth login` (or `GH_TOKEN`) and Node/npm.
 
+## Shortcuts
+
+`bin/fm-setup-copilot.sh` links `bin/fm` to `~/.local/bin/fm`:
+
+| Command | Does |
+| --- | --- |
+| `fm` | start the first mate in tmux (session `firstmate`), or reattach |
+| `fm status` | fleet overview (`bin/fm-fleet-view.sh`) |
+| `fm watch` | attach to the session to watch crewmates (`Ctrl-b d` detaches) |
+| `fm windows` | list first-mate and crewmate windows |
+| `fm stop` | kill the session and its crewmates (asks first) |
+
+Roles: you are the captain, the Copilot session `fm` starts is the first mate,
+and the agents it spawns per task are crewmates. You only talk to the first mate,
+in plain English ("scout how X works", "fix Y, local-only").
+
 ## What is supported
 
 - **Primary:** `copilot` is detected by `bin/fm-harness.sh` and anchors the fleet

@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# fm - short commands for running firstmate with Copilot CLI.
+#   fm            start the first mate in tmux, or reattach if already running
+#   fm status     fleet overview (bin/fm-fleet-view.sh)
+#   fm watch      attach to the tmux session to watch the crew (Ctrl-b d detaches)
+#   fm windows    list the first mate and crewmate tmux windows
+#   fm stop       stop the first mate session (crewmates included; asks first)
+set -eu
+
+ROOT="$(cd "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/.." && pwd)"
+SESSION=firstmate
+export PATH="$HOME/.local/bin:$PATH"
+
+alive() { tmux has-session -t "$SESSION" 2>/dev/null; }
+attach() { if [ -n "${TMUX:-}" ]; then tmux switch-client -t "$SESSION"; else tmux attach -t "$SESSION"; fi; }
+
+case "${1:-start}" in
+  start)
+    command -v tmux >/dev/null || { echo "tmux missing: run bin/fm-setup-copilot.sh" >&2; exit 1; }
+    alive || tmux new-session -d -s "$SESSION" -n first-mate -c "$ROOT" 'copilot --allow-all --no-auto-update'
+    attach
+    ;;
+  status) exec "$ROOT/bin/fm-fleet-view.sh" ;;
+  watch) alive || { echo "no firstmate session; run: fm" >&2; exit 1; }; attach ;;
+  windows) alive && tmux list-windows -t "$SESSION" || echo "no firstmate session" ;;
+  stop)
+    alive || { echo "no firstmate session"; exit 0; }
+    tmux list-windows -t "$SESSION"
+    printf 'Kill this session and every crewmate in it? [y/N] '
+    read -r ans
+    [ "$ans" = y ] && tmux kill-session -t "$SESSION" && echo stopped
+    ;;
+  *) sed -n 2,7p "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

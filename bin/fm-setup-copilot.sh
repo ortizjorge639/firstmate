@@ -76,6 +76,11 @@ if [ -n "$SCRATCH" ]; then
   echo "ready: $SCRATCH"
 fi
 
+step "Shortcut"
+mkdir -p "$HOME/.local/bin"
+ln -sf "$ROOT/bin/fm" "$HOME/.local/bin/fm"
+echo "linked: ~/.local/bin/fm (ensure ~/.local/bin is on PATH)"
+
 step "Done"
-echo "Launch: cd $ROOT && copilot --allow-all"
+echo "Launch: fm   (or: cd $ROOT && copilot --allow-all)"
 echo "Then tell the first mate to register the scratch project in local-only mode."
